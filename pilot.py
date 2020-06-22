@@ -1,4 +1,4 @@
-mport board
+import board
 import busio
 import digitalio
 import adafruit_max31856
