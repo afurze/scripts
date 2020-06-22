@@ -29,16 +29,6 @@ def singleton_check():
 		f.write(str(pid))
 
 
-# Read temp from Adafruit MAX313856
-def get_temp():
-	spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-	cs = digitalio.DigitalInOut(board.D5)
-	cs.direction = digitalio.Direction.OUTPUT
-	max31856 = adafruit_max31856.MAX31856(spi, cs)
-
-	return(max31856.temperature)
-
-
 # Sends the pilot light out email
 def send_mail():
 	api_key = os.environ['MJ_APIKEY_PUBLIC']
@@ -67,10 +57,15 @@ def send_mail():
 
 def main():
 	singleton_check()
-	# Run a temp check every 5 minutes
+
+	# Open thermocouple for reading
+	spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+	cs = digitalio.DigitalInOut(board.D5)
+	cs.direction = digitalio.Direction.OUTPUT
+	max31856 = adafruit_max31856.MAX31856(spi, cs)
+
 	while(True):
-		temp = get_temp()
-		if (temp < 35):
+		if (max31856.temperature < 35):
 			send_mail()
 	time.sleep(3600)
 
