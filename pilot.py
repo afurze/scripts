@@ -2,61 +2,43 @@ import board
 import busio
 import digitalio
 import adafruit_max31856
+import logging
 import os
-from mailjet_rest import Client
+import requests
+from tendo import singleton
 import time
-
-
-# Housekeeping, check if another instance is running
-def singleton_check():
-	try:
-		with open('pilot.pid', 'r') as f:
-			pid = f.readline()
-			try:
-				os.kill(pid, 0)
-			except OSError:
-				# Safe, previous pid is dead
-				pass
-			else:
-				# Abort!
-				sys.exit()
-	except:
-		pass
-
-	# Update the pid file with our pid
-	with open('pilot.pid', 'w') as f:
-		pid = os.getpid()
-		f.write(str(pid))
 
 
 # Sends the pilot light out email
 def send_mail():
-	api_key = os.environ['MJ_APIKEY_PUBLIC']
-	api_secret = os.environ['MJ_APIKEY_PRIVATE']
-	mailjet = Client(auth=(api_key, api_secret), version='v3.1')
-	data = {
-		'Messages': [
-			{
-				'From': {
-					'Email': 'furze.andrew@gmail.com',
-					'Name': 'Andrew Furze'
-				},
-				'To': [
-					{
-						'Email': 'furze.andrew@gmail.com',
-						'Name': 'Andrew Furze'
-					}
-				],
-				'Subject': 'Pilot light out',
-				'TextPart': 'Pilot light out'
-			}
-		]
-	}
-	result = mailjet.send.create(data=data)
+	api_secret = os.environ['MAILGUN_API_PRIVATE']
+	logging.info('Sending email alert')
+	logging.debug('API secret: %s', api_secret)
+
+	response = requests.post(
+		'https://api.mailgun.net/v3/sandboxd8f8a4c9c2e649288d536b191458544c.mailgun.org/messages',
+		auth=('api', api_secret),
+		data={
+			'from': 'furze.andrew@gmail.com',
+			'to': ['furze.andrew@gmail.com'],
+			'subject': 'Pilot Out',
+			'text': 'Pilot out'
+		}
+	)
+
+	logging.debug(response)
 
 
 def main():
-	singleton_check()
+	# Singleton housekeeping
+	me = singleton.SingleInstance()
+
+	# Setup logging
+	root_logger = logging.getLogger()
+	root_logger.setLevel(logging.INFO)
+	handler = logging.FileHandler('pilot.log', 'a', 'utf-8')
+	handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+	root_logger.addHandler(handler)
 
 	# Open thermocouple for reading
 	spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -65,9 +47,11 @@ def main():
 	max31856 = adafruit_max31856.MAX31856(spi, cs)
 
 	while(True):
-		if (max31856.temperature < 35):
+		currentTemp = max31856.temperature
+		logging.info('Current temp: %s', currentTemp)
+		if (currentTemp < 35):
 			send_mail()
-	time.sleep(3600)
+		time.sleep(60)
 
 
 if __name__ == '__main__':
